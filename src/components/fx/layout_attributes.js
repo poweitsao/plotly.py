@@ -50,7 +50,7 @@ module.exports = {
             'turntable',
             false
         ],
-        dflt: 'zoom',
+        dflt: 'pan',
         editType: 'modebar',
         description: [
             'Determines the mode of drag interactions.',
