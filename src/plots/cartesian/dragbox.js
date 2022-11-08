@@ -343,7 +343,7 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
     }
 
     function zoomMove(dx0, dy0) {
-        console.log("zoomMove")
+        // console.log("zoomMove")
         if (gd._transitioningWithDuration) {
             return false;
         }
@@ -444,7 +444,7 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
     }
 
     function zoomDone() {
-        console.log('zoomDone')
+        // console.log('zoomDone')
         computeZoomUpdates();
         removeZoombox(gd);
         dragTail();
@@ -459,7 +459,7 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
     var mainplot = plotinfo.mainplot ? gd._fullLayout._plots[plotinfo.mainplot] : plotinfo;
 
     function zoomWheel(e) {
-        console.log("zoomWheel")
+        // console.log("zoomWheel")
         // deactivate mousewheel scrolling on embedded graphs
         // devs can override this with layout._enablescrollzoom,
         // but _ ensures this setting won't leave their page
@@ -486,7 +486,8 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
             Lib.log('Did not find wheel motion attributes: ', e);
             return;
         }
-
+        // i think wheelDelta == d in dz
+        // console.log('wheelDelta', wheelDelta)
         var zoom = Math.exp(-Math.min(Math.max(wheelDelta, -20), 20) / 200);
         var gbb = mainplot.draglayer.select('.nsewdrag').node().getBoundingClientRect();
         var xfrac = (e.clientX - gbb.left) / gbb.width;
@@ -494,13 +495,15 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
         var i;
 
         function zoomWheelOneAxis(ax, centerFraction, zoom) {
-            console.log("zoomWheelOneAxis")
+            // console.log("zoomWheelOneAxis")
+            // console.log("zoomWheelOneAxis", zoom)
             if (ax.fixedrange) return;
 
             var axRange = Lib.simpleMap(ax.range, ax.r2l);
             var v0 = axRange[0] + (axRange[1] - axRange[0]) * centerFraction;
             function doZoom(v) { return ax.l2r(v0 + (v - v0) * zoom); }
             ax.range = axRange.map(doZoom);
+            // console.log("ax.range", ax.range)
         }
 
         if (editX) {
@@ -517,10 +520,10 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
             scrollViewBox[0] += scrollViewBox[2] * xfrac * (1 / zoom - 1);
         }
         if (editY) {
-            if (!ns) yfrac = 0.5;
-
+            yfrac = 0.5;
+            // console.log("zoomWheel yaxes", yaxes[0])
             for (i = 0; i < yaxes.length; i++) {
-                zoomWheelOneAxis(yaxes[i], yfrac, zoom);
+                zoomWheelOneAxis(yaxes[i], 0.5, zoom);
             }
             updateMatchedAxRange('y');
 
@@ -553,6 +556,9 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
 
     // plotDrag: move the plot in response to a drag
     function plotDrag(dx, dy) {
+        // console.log('plotDrag: dx', dx)
+        // console.log('plotDrag: dy', dy)
+        // console.log('plotDrag: yActive', yActive)
         dx = dx * scaleX;
         dy = dy * scaleY;
         // If a transition is in progress, then disable any behavior:
@@ -600,12 +606,15 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
         // TODO: this makes (generally non-fatal) errors when you get
         // near floating point limits
         function dz(axArray, end, d) {
-            console.log('dz')
+            // console.log('dz')
+            // console.log('dz axArray', axArray)
+            // console.log('dz d', d)
             var otherEnd = 1 - end;
             var movedAx;
             var newLinearizedEnd;
             for (var i = 0; i < axArray.length; i++) {
                 var axi = axArray[i];
+                // console.log("axi._rl", axi._rl)
                 if (axi.fixedrange) continue;
                 movedAx = axi;
                 newLinearizedEnd = axi._rl[otherEnd] +
@@ -618,6 +627,89 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
             }
             return movedAx._length * (movedAx._rl[end] - newLinearizedEnd) /
                 (movedAx._rl[end] - movedAx._rl[otherEnd]);
+        }
+
+        function dzCenter2(axArray, end, d) {
+            // console.log('dz')
+            // console.log('dz axArray', axArray)
+            // console.log('dz d', d)
+            var otherEnd = 1 - end;
+            var movedAx;
+            var newLinearizedEnd;
+            for (var i = 0; i < axArray.length; i++) {
+                var axi = axArray[i];
+                // console.log("axi._rl", axi._rl)
+                if (axi.fixedrange) continue;
+                movedAx = axi;
+                newLinearizedEnd = axi._rl[otherEnd] +
+                    (axi._rl[end] - axi._rl[otherEnd]) / dZoom(d / axi._length);
+                var newEnd = axi.l2r(newLinearizedEnd);
+
+                // if l2r comes back false or undefined, it means we've dragged off
+                // the end of valid ranges - so stop.
+                if (newEnd !== false && newEnd !== undefined) axi.range[end] = newEnd;
+            }
+            // return movedAx._length * (movedAx._rl[end] - newLinearizedEnd) /
+            //     (movedAx._rl[end] - movedAx._rl[otherEnd]);
+            dy = movedAx._length * (movedAx._rl[end] - newLinearizedEnd[end]) /
+                (movedAx._rl[end] - movedAx._rl[otherEnd]);
+
+            var temp = end;
+            end = otherEnd;
+            otherEnd = temp;
+            dx = movedAx._length * (movedAx._rl[end] - newLinearizedEnd[end]) /
+                (movedAx._rl[end] - movedAx._rl[otherEnd]);
+            return [dy, dx];
+        }
+
+        function dzCenter(axArray, end, d) {
+            // console.log('dz')
+            // console.log('dz axArray', axArray)
+            // console.log('dz d', d)
+            var otherEnd = 1 - end;
+            var movedAx;
+            var newLinearizedEnd;
+            for (var i = 0; i < axArray.length; i++) {
+                var axi = axArray[i];
+                console.log("axi._rl", axi._rl)
+                if (axi.fixedrange) continue;
+                movedAx = axi;
+                // newLinearizedEnd = axi._rl[otherEnd] +
+                //     (axi._rl[end] - axi._rl[otherEnd]) / dZoom(d / axi._length);
+                newLinearizedEnd = dzCenterNewEnds(axi, d)
+                console.log('newLinearizedEnd', newLinearizedEnd)
+                var newEnd = axi.l2r(newLinearizedEnd);
+
+                // if l2r comes back false or undefined, it means we've dragged off
+                // the end of valid ranges - so stop.
+                if (newEnd !== false && newEnd !== undefined) axi.range[end] = newEnd;
+            }
+            console.log("movedAx", movedAx)
+            dy = movedAx._length * (movedAx._rl[end] - newLinearizedEnd[end]) /
+                (movedAx._rl[end] - movedAx._rl[otherEnd]);
+            console.log("dzCenter dy", dy)
+
+            console.log("dzCenter otherEnd", otherEnd)
+            console.log("dzCenter end", end)
+
+            var temp = end;
+            end = otherEnd;
+            otherEnd = temp;
+            dx = movedAx._length * (movedAx._rl[end] - newLinearizedEnd[end]) /
+                (movedAx._rl[end] - movedAx._rl[otherEnd]);
+            return [dy, dx];
+        }
+
+        function dzCenterNewEnds(ax, d) {
+            var zoom = Math.exp(-Math.min(Math.max(d, -20), 20) / 200)
+            console.log("zoomWheelOneAxis", ax)
+            if (ax.fixedrange) return;
+
+            var axRange = Lib.simpleMap(ax.range, ax.r2l);
+            var v0 = axRange[0] + (axRange[1] - axRange[0]) * 0.5;
+            function doZoom(v) { return ax.l2r(v0 + (v - v0) * zoom); }
+            // return doZoom(ax)
+            return axRange.map(doZoom);
         }
 
         var dxySign = ((xActive === 'w') === (yActive === 'n')) ? 1 : -1;
@@ -638,6 +730,11 @@ function makeDragBox(gd, plotinfo, x, y, w, h, ns, ew) {
         if (yActive === 'n') dy = dz(yaxes, 1, dy);
         else if (yActive === 's') dy = dz(yaxes, 0, -dy);
         else if (!yActive) dy = 0;
+        // if (yActive === 'n') [dy, dx] = dzCenter2(yaxes, 1, dy);
+        // else if (yActive === 's') [dy, dx] = dzCenter2(yaxes, 1, -dy);
+        // else if (!yActive) dy = 0;
+        // console.log("dzCenter(yaxes, dy)", dzCenter(yaxes[0], dy))
+        // console.log("dy", dy)
 
         xStart = (xActive === 'w') ? dx : 0;
         yStart = (yActive === 'n') ? dy : 0;
@@ -1041,7 +1138,7 @@ function getEndText(ax, end) {
 }
 
 function zoomAxRanges(axList, r0Fraction, r1Fraction, updates, linkedAxes) {
-    console.log("zoomAxRanges")
+    // console.log("zoomAxRanges")
     for (var i = 0; i < axList.length; i++) {
         var axi = axList[i];
         if (axi.fixedrange) continue;
@@ -1069,7 +1166,7 @@ function zoomAxRanges(axList, r0Fraction, r1Fraction, updates, linkedAxes) {
 }
 
 function dragAxList(axList, pix) {
-    console.log("dragAxList")
+    // console.log("dragAxList")
     for (var i = 0; i < axList.length; i++) {
         var axi = axList[i];
         if (!axi.fixedrange) {
@@ -1100,7 +1197,7 @@ function dragAxList(axList, pix) {
 // d<0 is expanding (cursor is off the plot, axis end moves
 //  nonlinearly so you can expand far)
 function dZoom(d) {
-    console.log("dZoom")
+    // console.log("dZoom")
     return 1 - ((d >= 0) ? Math.min(d, 0.9) :
         1 / (1 / Math.max(d, -0.3) + 3.222));
 }
@@ -1113,6 +1210,9 @@ function getDragCursor(nsew, dragmode, isMainDrag) {
         if (isMainDrag) return '';
         if (dragmode === 'pan') return 'move';
         return 'crosshair';
+    }
+    if (nsew == "w") {
+        return 'ew-resize';
     }
     return nsew.toLowerCase() + '-resize';
 }
